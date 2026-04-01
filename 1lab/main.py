@@ -1,6 +1,8 @@
 import pygame
 import sys
 
+# ШАХМАТНЫЕ ФИГУРЫ 
+
 class Piece:
     """Базовый класс для всех фигур."""
     def __init__(self, color, position):
@@ -158,6 +160,7 @@ class King(Piece):
                     target = board.get_piece(r, c)
                     if target is None or target.color != self.color:
                         moves.append((r, c))
+        # Рокировка (упрощённо, без проверки шахов)
         if not self.has_moved:
             rook_short = board.get_piece(row, 7)
             if rook_short and isinstance(rook_short, Rook) and not rook_short.has_moved:
@@ -170,7 +173,7 @@ class King(Piece):
         return moves
 
 
-# НОВЫЕ ОРИГИНАЛЬНЫЕ ФИГУРЫ
+# НОВЫЕ ОРИГИНАЛЬНЫЕ ФИГУРЫ 
 
 class Griffin(Piece):
     """Грифон: ходит как слон ИЛИ как конь."""
@@ -227,7 +230,8 @@ class Camel(Piece):
 
 
 class Elephant(Piece):
-    """Слон: ходит на две клетки по диагонали, перепрыгивая через любую фигуру на первой клетке."""
+    """Слон: ходит на две клетки в любом направлении (включая диагонали и ортогональ),
+       перепрыгивая через любую фигуру на первой клетке."""
     def __init__(self, color, position):
         super().__init__(color, position)
         self.symbol = 'E' if color == 'white' else 'e'
@@ -235,7 +239,10 @@ class Elephant(Piece):
     def get_possible_moves(self, board, en_passant_target=None):
         moves = []
         row, col = self.position
-        directions = [(-1, -1), (-1, 1), (1, -1), (1, 1)]
+        # Все 8 направлений: диагональные и ортогональные
+        directions = [(-1, -1), (-1, 0), (-1, 1),
+                      (0, -1),           (0, 1),
+                      (1, -1),  (1, 0), (1, 1)]
         for dr, dc in directions:
             r2, c2 = row + 2*dr, col + 2*dc
             if 0 <= r2 < 8 and 0 <= c2 < 8:
@@ -325,6 +332,8 @@ class Game:
         self.board = Board()
         self.current_turn = 'white'
         self.en_passant_target = None
+        self.game_over = False
+        self.winner = None
         self.setup_board()
 
     def setup_board(self):
@@ -346,42 +355,13 @@ class Game:
         self.board.place_piece(Griffin('white', (0, 2)), 0, 2)
         self.board.place_piece(Elephant('white', (0, 5)), 0, 5)
         self.board.place_piece(Elephant('black', (7, 2)), 7, 2)
-        self.board.place_piece(Griffin('black', (7, 5)), 7, 5)
+        self.board.place_piece(Camel('black', (7, 5)), 7, 5)
         # Ферзи
         self.board.place_piece(Queen('white', (0, 3)), 0, 3)
         self.board.place_piece(Queen('black', (7, 3)), 7, 3)
         # Короли
         self.board.place_piece(King('white', (0, 4)), 0, 4)
         self.board.place_piece(King('black', (7, 4)), 7, 4)
-
-    def is_valid_move(self, move):
-        piece = move.piece
-        start = move.start
-        end = move.end
-
-        if isinstance(piece, Pawn):
-            possible = piece.get_possible_moves(self.board, self.en_passant_target)
-        else:
-            possible = piece.get_possible_moves(self.board)
-
-        if end not in possible:
-            return False
-
-        test_move = Move(start, end, piece,
-                         captured_piece=self.board.get_piece(*end),
-                         is_castling=move.is_castling,
-                         rook_start=move.rook_start,
-                         rook_end=move.rook_end,
-                         is_en_passant=move.is_en_passant,
-                         en_passant_capture_pos=move.en_passant_capture_pos)
-        test_move.execute(self.board)
-
-        king_pos = self.find_king(self.current_turn)
-        in_check = self.is_square_attacked(*king_pos, self.current_turn)
-
-        test_move.undo(self.board)
-
-        return not in_check
 
     def find_king(self, color):
         for row in range(8):
@@ -407,35 +387,84 @@ class Game:
                             return True
         return False
 
-    def get_attacked_squares(self, color):
-        attacked = set()
+    def is_check(self, color):
+        king_pos = self.find_king(color)
+        if not king_pos:
+            return False
+        return self.is_square_attacked(*king_pos, color)
+
+    def is_valid_move(self, move):
+        piece = move.piece
+        start = move.start
+        end = move.end
+
+        if isinstance(piece, Pawn):
+            possible = piece.get_possible_moves(self.board, self.en_passant_target)
+        else:
+            possible = piece.get_possible_moves(self.board)
+
+        if end not in possible:
+            return False
+
+        test_move = Move(start, end, piece,
+                         captured_piece=self.board.get_piece(*end),
+                         is_castling=move.is_castling,
+                         rook_start=move.rook_start,
+                         rook_end=move.rook_end,
+                         is_en_passant=move.is_en_passant,
+                         en_passant_capture_pos=move.en_passant_capture_pos)
+        test_move.execute(self.board)
+
+        in_check = self.is_check(self.current_turn)
+
+        test_move.undo(self.board)
+
+        return not in_check
+
+    def has_legal_moves(self, color):
+        """Проверяет, есть ли у игрока хотя бы один допустимый ход."""
         for row in range(8):
             for col in range(8):
                 piece = self.board.get_piece(row, col)
                 if piece and piece.color == color:
                     if isinstance(piece, Pawn):
-                        direction = 1 if piece.color == 'white' else -1
-                        for dc in (-1, 1):
-                            r = row + direction
-                            c = col + dc
-                            if 0 <= r < 8 and 0 <= c < 8:
-                                attacked.add((r, c))
-                    elif isinstance(piece, King):
-                        for dr in (-1, 0, 1):
-                            for dc in (-1, 0, 1):
-                                if dr == 0 and dc == 0:
-                                    continue
-                                r = row + dr
-                                c = col + dc
-                                if 0 <= r < 8 and 0 <= c < 8:
-                                    attacked.add((r, c))
+                        possible = piece.get_possible_moves(self.board, self.en_passant_target)
                     else:
-                        moves = piece.get_possible_moves(self.board)
-                        for move in moves:
-                            attacked.add(move)
-        return attacked
+                        possible = piece.get_possible_moves(self.board)
+                    for end in possible:
+                        is_castling = isinstance(piece, King) and abs(end[1] - col) == 2
+                        rook_start = rook_end = None
+                        if is_castling:
+                            if end[1] > col:
+                                rook_start = (row, 7)
+                                rook_end = (row, 5)
+                            else:
+                                rook_start = (row, 0)
+                                rook_end = (row, 3)
+                        is_en_passant = False
+                        en_passant_capture_pos = None
+                        captured = self.board.get_piece(*end)
+                        if isinstance(piece, Pawn):
+                            if self.en_passant_target and end == self.en_passant_target:
+                                enemy_pawn_pos = (row, end[1])
+                                enemy_pawn = self.board.get_piece(*enemy_pawn_pos)
+                                if enemy_pawn and isinstance(enemy_pawn, Pawn) and enemy_pawn.color != color:
+                                    is_en_passant = True
+                                    en_passant_capture_pos = enemy_pawn_pos
+                                    captured = enemy_pawn
+                        move = Move((row, col), end, piece, captured, is_castling,
+                                    rook_start, rook_end, is_en_passant, en_passant_capture_pos)
+                        if self.is_valid_move(move):
+                            return True
+        return False
+
+    def is_checkmate(self, color):
+        return self.is_check(color) and not self.has_legal_moves(color)
 
     def make_move(self, start, end):
+        if self.game_over:
+            return False
+
         piece = self.board.get_piece(*start)
         if piece is None or piece.color != self.current_turn:
             return False
@@ -486,6 +515,12 @@ class Game:
             self.board.place_piece(Queen(piece.color, end), end[0], end[1])
 
         self.current_turn = 'black' if self.current_turn == 'white' else 'white'
+
+        # Проверка на мат
+        if self.is_checkmate(self.current_turn):
+            self.game_over = True
+            self.winner = 'white' if self.current_turn == 'black' else 'black'
+
         return True
 
     def promote_pawn(self, pos, piece_type):
@@ -507,13 +542,15 @@ class Game:
         return True
 
 
+# ГРАФИЧЕСКИЙ ИНТЕРФЕЙС 
+
 WINDOW_SIZE = 600
 CELL_SIZE = WINDOW_SIZE // 8
 COLOR_WHITE = (240, 217, 181)
 COLOR_BLACK = (181, 136, 99)
 COLOR_HIGHLIGHT = (186, 202, 68)
+COLOR_POSSIBLE = (100, 200, 100, 100)
 
-# Символы для фигур
 UNICODE_PIECES = {
     ('white', 'K'): '♔', ('white', 'Q'): '♕', ('white', 'R'): '♖',
     ('white', 'B'): '♗', ('white', 'N'): '♘', ('white', 'P'): '♙',
@@ -535,7 +572,6 @@ class ChessGUI:
         self.waiting_for_promotion = False
         self.promotion_pos = None
 
-        # Подбор шрифта, поддерживающего шахматные символы
         font_candidates = ["Apple Symbols", "Arial Unicode MS", "DejaVu Sans",
                            "Segoe UI Symbol", "Noto Sans Symbols2", "Arial"]
         found_font = None
@@ -551,11 +587,9 @@ class ChessGUI:
         if found_font is None:
             found_font = pygame.font.Font(None, CELL_SIZE - 20)
         self.font = found_font
+        self.message_font = pygame.font.SysFont("Arial", 36)
 
     def draw_board(self):
-        opponent = 'black' if self.game.current_turn == 'white' else 'white'
-        attacked_squares = self.game.get_attacked_squares(opponent)
-
         for row in range(8):
             for col in range(8):
                 color = COLOR_WHITE if (row + col) % 2 == 0 else COLOR_BLACK
@@ -566,7 +600,7 @@ class ChessGUI:
                     pygame.draw.rect(self.screen, COLOR_HIGHLIGHT, rect)
                 if (row, col) in self.possible_moves:
                     s = pygame.Surface((CELL_SIZE, CELL_SIZE), pygame.SRCALPHA)
-                    s.fill((100, 200, 100, 100))
+                    s.fill(COLOR_POSSIBLE)
                     self.screen.blit(s, rect)
 
         for row in range(8):
@@ -594,51 +628,19 @@ class ChessGUI:
                         sym = 'E'
                     else:
                         sym = '?'
-
                     char = UNICODE_PIECES.get((piece.color, sym), '?')
                     text = self.font.render(char, True, (0, 0, 0))
                     rect = pygame.Rect(col * CELL_SIZE, row * CELL_SIZE, CELL_SIZE, CELL_SIZE)
                     text_rect = text.get_rect(center=rect.center)
                     self.screen.blit(text, text_rect)
 
-        for row in range(8):
-            for col in range(8):
-                piece = self.game.board.get_piece(row, col)
-                if piece and piece.color == self.game.current_turn:
-                    rect = pygame.Rect(col * CELL_SIZE, row * CELL_SIZE, CELL_SIZE, CELL_SIZE)
-                    if (row, col) in attacked_squares:
-                        if isinstance(piece, King):
-                            pygame.draw.rect(self.screen, (255, 0, 0), rect, 4)
-                        else:
-                            pygame.draw.rect(self.screen, (255, 0, 0), rect, 2)
-
-        if self.waiting_for_promotion:
-            self.draw_promotion_menu()
-
-    def draw_promotion_menu(self):
-        overlay = pygame.Surface((WINDOW_SIZE, WINDOW_SIZE), pygame.SRCALPHA)
-        overlay.fill((0, 0, 0, 128))
-        self.screen.blit(overlay, (0, 0))
-
-        panel_width = 300
-        panel_height = 80
-        panel_x = (WINDOW_SIZE - panel_width) // 2
-        panel_y = (WINDOW_SIZE - panel_height) // 2
-        pygame.draw.rect(self.screen, (50, 50, 50), (panel_x, panel_y, panel_width, panel_height))
-        pygame.draw.rect(self.screen, (200, 200, 200), (panel_x, panel_y, panel_width, panel_height), 2)
-
-        pieces = [('Q', '♕'), ('R', '♖'), ('B', '♗'), ('N', '♘')]
-        button_width = 60
-        button_height = 60
-        spacing = (panel_width - 4 * button_width) // 5
-        for i, (piece_char, symbol) in enumerate(pieces):
-            x = panel_x + spacing + i * (button_width + spacing)
-            y = panel_y + (panel_height - button_height) // 2
-            rect = pygame.Rect(x, y, button_width, button_height)
-            pygame.draw.rect(self.screen, (100, 100, 100), rect)
-            pygame.draw.rect(self.screen, (255, 255, 255), rect, 2)
-            text = self.font.render(symbol, True, (255, 255, 255))
-            text_rect = text.get_rect(center=rect.center)
+        if self.game.game_over:
+            overlay = pygame.Surface((WINDOW_SIZE, WINDOW_SIZE), pygame.SRCALPHA)
+            overlay.fill((0, 0, 0, 180))
+            self.screen.blit(overlay, (0, 0))
+            winner_text = f"{self.game.winner.capitalize()} wins by checkmate!"
+            text = self.message_font.render(winner_text, True, (255, 255, 255))
+            text_rect = text.get_rect(center=(WINDOW_SIZE // 2, WINDOW_SIZE // 2))
             self.screen.blit(text, text_rect)
 
     def get_square_under_mouse(self):
@@ -654,7 +656,12 @@ class ChessGUI:
             if event.type == pygame.QUIT:
                 self.running = False
 
-            elif event.type == pygame.MOUSEBUTTONDOWN:
+            if self.game.game_over:
+                if event.type == pygame.KEYDOWN:
+                    self.running = False
+                continue
+
+            if event.type == pygame.MOUSEBUTTONDOWN:
                 if self.waiting_for_promotion:
                     mouse_pos = pygame.mouse.get_pos()
                     panel_width = 300
