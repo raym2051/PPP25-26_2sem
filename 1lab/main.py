@@ -1,7 +1,7 @@
 import pygame
 import sys
 
-# ШАХМАТНЫЕ ФИГУРЫ
+# ШАХМАТНЫЕ ФИГУРЫ 
 
 class Piece:
     """Базовый класс для всех фигур."""
@@ -25,12 +25,14 @@ class Pawn(Piece):
     def get_possible_moves(self, board, en_passant_target=None):
         moves = []
         row, col = self.position
-        direction = 1 if self.color == 'white' else -1
+        # Белые идут вверх (уменьшение row), чёрные – вниз (увеличение row)
+        direction = -1 if self.color == 'white' else 1
 
         new_row = row + direction
         if 0 <= new_row < 8 and board.get_piece(new_row, col) is None:
             moves.append((new_row, col))
-            if (self.color == 'white' and row == 1) or (self.color == 'black' and row == 6):
+            # Ход на 2 с начальной позиции
+            if (self.color == 'white' and row == 6) or (self.color == 'black' and row == 1):
                 two_row = row + 2 * direction
                 if board.get_piece(two_row, col) is None:
                     moves.append((two_row, col))
@@ -173,7 +175,7 @@ class King(Piece):
         return moves
 
 
-# НОВЫЕ ОРИГИНАЛЬНЫЕ ФИГУРЫ 
+# НОВЫЕ ОРИГИНАЛЬНЫЕ ФИГУРЫ
 
 class Griffin(Piece):
     """Грифон: ходит как слон ИЛИ как конь."""
@@ -336,31 +338,31 @@ class Game:
         self.setup_board()
 
     def setup_board(self):
-        # Пешки
+        # Пешки: белые на 6-й строке (row=6), чёрные на 1-й (row=1)
         for col in range(8):
-            self.board.place_piece(Pawn('white', (1, col)), 1, col)
-            self.board.place_piece(Pawn('black', (6, col)), 6, col)
+            self.board.place_piece(Pawn('white', (6, col)), 6, col)
+            self.board.place_piece(Pawn('black', (1, col)), 1, col)
         # Ладьи
-        self.board.place_piece(Rook('white', (0, 0)), 0, 0)
-        self.board.place_piece(Rook('white', (0, 7)), 0, 7)
-        self.board.place_piece(Rook('black', (7, 0)), 7, 0)
-        self.board.place_piece(Rook('black', (7, 7)), 7, 7)
+        self.board.place_piece(Rook('white', (7, 0)), 7, 0)
+        self.board.place_piece(Rook('white', (7, 7)), 7, 7)
+        self.board.place_piece(Rook('black', (0, 0)), 0, 0)
+        self.board.place_piece(Rook('black', (0, 7)), 0, 7)
         # Кони
-        self.board.place_piece(Knight('white', (0, 1)), 0, 1)
-        self.board.place_piece(Knight('white', (0, 6)), 0, 6)
-        self.board.place_piece(Knight('black', (7, 1)), 7, 1)
-        self.board.place_piece(Knight('black', (7, 6)), 7, 6)
+        self.board.place_piece(Knight('white', (7, 1)), 7, 1)
+        self.board.place_piece(Knight('white', (7, 6)), 7, 6)
+        self.board.place_piece(Knight('black', (0, 1)), 0, 1)
+        self.board.place_piece(Knight('black', (0, 6)), 0, 6)
         # Новые фигуры вместо слонов
-        self.board.place_piece(Griffin('white', (0, 2)), 0, 2)
-        self.board.place_piece(Elephant('white', (0, 5)), 0, 5)
-        self.board.place_piece(Elephant('black', (7, 2)), 7, 2)
-        self.board.place_piece(Camel('black', (7, 5)), 7, 5)
+        self.board.place_piece(Griffin('white', (7, 2)), 7, 2)
+        self.board.place_piece(Camel('white', (7, 5)), 7, 5)
+        self.board.place_piece(Elephant('black', (0, 2)), 0, 2)
+        self.board.place_piece(Camel('black', (0, 5)), 0, 5)
         # Ферзи
-        self.board.place_piece(Queen('white', (0, 3)), 0, 3)
-        self.board.place_piece(Queen('black', (7, 3)), 7, 3)
+        self.board.place_piece(Queen('white', (7, 3)), 7, 3)
+        self.board.place_piece(Queen('black', (0, 3)), 0, 3)
         # Короли
-        self.board.place_piece(King('white', (0, 4)), 0, 4)
-        self.board.place_piece(King('black', (7, 4)), 7, 4)
+        self.board.place_piece(King('white', (7, 4)), 7, 4)
+        self.board.place_piece(King('black', (0, 4)), 0, 4)
 
     def find_king(self, color):
         for row in range(8):
@@ -377,7 +379,7 @@ class Game:
                 piece = self.board.get_piece(r, c)
                 if piece and piece.color == opponent:
                     if isinstance(piece, Pawn):
-                        direction = 1 if piece.color == 'white' else -1
+                        direction = -1 if piece.color == 'white' else 1
                         if (row, col) == (r + direction, c + 1) or (row, col) == (r + direction, c - 1):
                             return True
                     else:
@@ -393,7 +395,7 @@ class Game:
                 piece = self.board.get_piece(row, col)
                 if piece and piece.color == color:
                     if isinstance(piece, Pawn):
-                        direction = 1 if piece.color == 'white' else -1
+                        direction = -1 if piece.color == 'white' else 1
                         for dc in (-1, 1):
                             r = row + direction
                             c = col + dc
@@ -449,7 +451,6 @@ class Game:
         return not in_check
 
     def has_legal_moves(self, color):
-        """Проверяет, есть ли у игрока хотя бы один допустимый ход."""
         for row in range(8):
             for col in range(8):
                 piece = self.board.get_piece(row, col)
@@ -538,6 +539,7 @@ class Game:
         if isinstance(piece, Pawn) and abs(end[0] - start[0]) == 2:
             self.en_passant_target = ((start[0] + end[0]) // 2, start[1])
 
+        # Превращение пешки
         if isinstance(piece, Pawn) and (end[0] == 0 or end[0] == 7):
             self.board.place_piece(Queen(piece.color, end), end[0], end[1])
 
@@ -568,7 +570,7 @@ class Game:
         return True
 
 
-# ГРАФИЧЕСКИЙ ИНТЕРФЕЙС
+
 
 WINDOW_SIZE = 600
 CELL_SIZE = WINDOW_SIZE // 8
@@ -576,8 +578,8 @@ COLOR_WHITE = (240, 217, 181)
 COLOR_BLACK = (181, 136, 99)
 COLOR_HIGHLIGHT = (186, 202, 68)
 COLOR_POSSIBLE = (100, 200, 100, 100)
-COLOR_ATTACKED = (255, 0, 0)        # для фигур под ударом
-COLOR_CAPTURE = (255, 100, 0)       # для фигур, которые можно взять выбранной
+COLOR_ATTACKED = (255, 0, 0)
+COLOR_CAPTURE = (255, 100, 0)
 
 UNICODE_PIECES = {
     ('white', 'K'): '♔', ('white', 'Q'): '♕', ('white', 'R'): '♖',
@@ -618,11 +620,9 @@ class ChessGUI:
         self.message_font = pygame.font.SysFont("Arial", 36)
 
     def draw_board(self):
-        # Вычисляем клетки, атакуемые противником (для подсветки фигур текущего игрока под ударом)
         opponent = 'black' if self.game.current_turn == 'white' else 'white'
         attacked_squares = self.game.get_attacked_squares(opponent)
 
-        # Если выбрана фигура, определяем вражеские фигуры, которые можно взять
         capture_targets = set()
         if self.selected_pos is not None:
             piece = self.game.board.get_piece(*self.selected_pos)
@@ -631,7 +631,6 @@ class ChessGUI:
                     moves = piece.get_possible_moves(self.game.board, self.game.en_passant_target)
                 else:
                     moves = piece.get_possible_moves(self.game.board)
-                # Ходы, которые ведут на вражескую фигуру
                 for move in moves:
                     target_piece = self.game.board.get_piece(*move)
                     if target_piece and target_piece.color != self.game.current_turn:
@@ -643,16 +642,13 @@ class ChessGUI:
                 rect = pygame.Rect(col * CELL_SIZE, row * CELL_SIZE, CELL_SIZE, CELL_SIZE)
                 pygame.draw.rect(self.screen, color, rect)
 
-                # Подсветка выбранной клетки
                 if self.selected_pos == (row, col):
                     pygame.draw.rect(self.screen, COLOR_HIGHLIGHT, rect)
-                # Подсветка возможных ходов
                 if (row, col) in self.possible_moves:
                     s = pygame.Surface((CELL_SIZE, CELL_SIZE), pygame.SRCALPHA)
                     s.fill(COLOR_POSSIBLE)
                     self.screen.blit(s, rect)
 
-        # Рисуем фигуры
         for row in range(8):
             for col in range(8):
                 piece = self.game.board.get_piece(row, col)
@@ -684,19 +680,15 @@ class ChessGUI:
                     text_rect = text.get_rect(center=rect.center)
                     self.screen.blit(text, text_rect)
 
-        # Подсветка фигур под ударом (для текущего игрока)
         for row in range(8):
             for col in range(8):
                 piece = self.game.board.get_piece(row, col)
                 if piece and piece.color == self.game.current_turn:
                     rect = pygame.Rect(col * CELL_SIZE, row * CELL_SIZE, CELL_SIZE, CELL_SIZE)
-                    # Шах короля
                     if isinstance(piece, King) and self.game.is_check(self.game.current_turn):
                         pygame.draw.rect(self.screen, COLOR_ATTACKED, rect, 4)
-                    # Обычная фигура под ударом
                     elif (row, col) in attacked_squares:
                         pygame.draw.rect(self.screen, COLOR_ATTACKED, rect, 2)
-                    # Если фигура может быть взята выбранной фигурой
                     if (row, col) in capture_targets:
                         pygame.draw.rect(self.screen, COLOR_CAPTURE, rect, 2)
 
