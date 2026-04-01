@@ -1,7 +1,7 @@
 import pygame
 import sys
 
-# ШАХМАТНЫЕ ФИГУРЫ 
+# ШАХМАТНЫЕ ФИГУРЫ
 
 class Piece:
     """Базовый класс для всех фигур."""
@@ -239,7 +239,6 @@ class Elephant(Piece):
     def get_possible_moves(self, board, en_passant_target=None):
         moves = []
         row, col = self.position
-        # Все 8 направлений: диагональные и ортогональные
         directions = [(-1, -1), (-1, 0), (-1, 1),
                       (0, -1),           (0, 1),
                       (1, -1),  (1, 0), (1, 1)]
@@ -387,6 +386,34 @@ class Game:
                             return True
         return False
 
+    def get_attacked_squares(self, color):
+        attacked = set()
+        for row in range(8):
+            for col in range(8):
+                piece = self.board.get_piece(row, col)
+                if piece and piece.color == color:
+                    if isinstance(piece, Pawn):
+                        direction = 1 if piece.color == 'white' else -1
+                        for dc in (-1, 1):
+                            r = row + direction
+                            c = col + dc
+                            if 0 <= r < 8 and 0 <= c < 8:
+                                attacked.add((r, c))
+                    elif isinstance(piece, King):
+                        for dr in (-1, 0, 1):
+                            for dc in (-1, 0, 1):
+                                if dr == 0 and dc == 0:
+                                    continue
+                                r = row + dr
+                                c = col + dc
+                                if 0 <= r < 8 and 0 <= c < 8:
+                                    attacked.add((r, c))
+                    else:
+                        moves = piece.get_possible_moves(self.board)
+                        for move in moves:
+                            attacked.add(move)
+        return attacked
+
     def is_check(self, color):
         king_pos = self.find_king(color)
         if not king_pos:
@@ -516,7 +543,6 @@ class Game:
 
         self.current_turn = 'black' if self.current_turn == 'white' else 'white'
 
-        # Проверка на мат
         if self.is_checkmate(self.current_turn):
             self.game_over = True
             self.winner = 'white' if self.current_turn == 'black' else 'black'
@@ -542,7 +568,7 @@ class Game:
         return True
 
 
-# ГРАФИЧЕСКИЙ ИНТЕРФЕЙС 
+# ГРАФИЧЕСКИЙ ИНТЕРФЕЙС
 
 WINDOW_SIZE = 600
 CELL_SIZE = WINDOW_SIZE // 8
@@ -550,6 +576,8 @@ COLOR_WHITE = (240, 217, 181)
 COLOR_BLACK = (181, 136, 99)
 COLOR_HIGHLIGHT = (186, 202, 68)
 COLOR_POSSIBLE = (100, 200, 100, 100)
+COLOR_ATTACKED = (255, 0, 0)        # для фигур под ударом
+COLOR_CAPTURE = (255, 100, 0)       # для фигур, которые можно взять выбранной
 
 UNICODE_PIECES = {
     ('white', 'K'): '♔', ('white', 'Q'): '♕', ('white', 'R'): '♖',
@@ -590,19 +618,41 @@ class ChessGUI:
         self.message_font = pygame.font.SysFont("Arial", 36)
 
     def draw_board(self):
+        # Вычисляем клетки, атакуемые противником (для подсветки фигур текущего игрока под ударом)
+        opponent = 'black' if self.game.current_turn == 'white' else 'white'
+        attacked_squares = self.game.get_attacked_squares(opponent)
+
+        # Если выбрана фигура, определяем вражеские фигуры, которые можно взять
+        capture_targets = set()
+        if self.selected_pos is not None:
+            piece = self.game.board.get_piece(*self.selected_pos)
+            if piece:
+                if isinstance(piece, Pawn):
+                    moves = piece.get_possible_moves(self.game.board, self.game.en_passant_target)
+                else:
+                    moves = piece.get_possible_moves(self.game.board)
+                # Ходы, которые ведут на вражескую фигуру
+                for move in moves:
+                    target_piece = self.game.board.get_piece(*move)
+                    if target_piece and target_piece.color != self.game.current_turn:
+                        capture_targets.add(move)
+
         for row in range(8):
             for col in range(8):
                 color = COLOR_WHITE if (row + col) % 2 == 0 else COLOR_BLACK
                 rect = pygame.Rect(col * CELL_SIZE, row * CELL_SIZE, CELL_SIZE, CELL_SIZE)
                 pygame.draw.rect(self.screen, color, rect)
 
+                # Подсветка выбранной клетки
                 if self.selected_pos == (row, col):
                     pygame.draw.rect(self.screen, COLOR_HIGHLIGHT, rect)
+                # Подсветка возможных ходов
                 if (row, col) in self.possible_moves:
                     s = pygame.Surface((CELL_SIZE, CELL_SIZE), pygame.SRCALPHA)
                     s.fill(COLOR_POSSIBLE)
                     self.screen.blit(s, rect)
 
+        # Рисуем фигуры
         for row in range(8):
             for col in range(8):
                 piece = self.game.board.get_piece(row, col)
@@ -633,6 +683,22 @@ class ChessGUI:
                     rect = pygame.Rect(col * CELL_SIZE, row * CELL_SIZE, CELL_SIZE, CELL_SIZE)
                     text_rect = text.get_rect(center=rect.center)
                     self.screen.blit(text, text_rect)
+
+        # Подсветка фигур под ударом (для текущего игрока)
+        for row in range(8):
+            for col in range(8):
+                piece = self.game.board.get_piece(row, col)
+                if piece and piece.color == self.game.current_turn:
+                    rect = pygame.Rect(col * CELL_SIZE, row * CELL_SIZE, CELL_SIZE, CELL_SIZE)
+                    # Шах короля
+                    if isinstance(piece, King) and self.game.is_check(self.game.current_turn):
+                        pygame.draw.rect(self.screen, COLOR_ATTACKED, rect, 4)
+                    # Обычная фигура под ударом
+                    elif (row, col) in attacked_squares:
+                        pygame.draw.rect(self.screen, COLOR_ATTACKED, rect, 2)
+                    # Если фигура может быть взята выбранной фигурой
+                    if (row, col) in capture_targets:
+                        pygame.draw.rect(self.screen, COLOR_CAPTURE, rect, 2)
 
         if self.game.game_over:
             overlay = pygame.Surface((WINDOW_SIZE, WINDOW_SIZE), pygame.SRCALPHA)
